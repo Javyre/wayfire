@@ -125,7 +125,11 @@ struct layer_container_t
  */
 class output_layer_manager_t
 {
+    // A hierarchical representation of the view stack order
     layer_container_t layers[TOTAL_LAYERS];
+
+    // A flat representation of the view stack order
+    std::vector<wayfire_view> view_list;
 
   public:
     output_layer_manager_t()
@@ -179,6 +183,7 @@ class output_layer_manager_t
 
         /* Reset the view's sublayer */
         sublayer = nullptr;
+        rebuild_stack_order();
     }
 
     void add_view_to_sublayer(wayfire_view view,
@@ -187,6 +192,7 @@ class output_layer_manager_t
         remove_view(view);
         get_view_sublayer(view) = sublayer;
         sublayer->views.push_front(view);
+        rebuild_stack_order();
     }
 
     nonstd::observer_ptr<sublayer_t> create_sublayer(layer_t layer_mask,
@@ -223,6 +229,7 @@ class output_layer_manager_t
     {
         view->damage();
         add_view_to_sublayer(view, create_sublayer(layer, SUBLAYER_FLOATING));
+        rebuild_stack_order();
         view->damage();
     }
 
@@ -239,6 +246,7 @@ class output_layer_manager_t
         }
 
         raise_to_front(sublayer->views, view);
+        rebuild_stack_order();
     }
 
     wayfire_view get_front_view(wf::layer_t layer)
@@ -264,6 +272,7 @@ class output_layer_manager_t
         if (view_sublayer == below_sublayer)
         {
             reorder_above(view_sublayer->views, view, below);
+            rebuild_stack_order();
 
             return;
         }
@@ -276,6 +285,7 @@ class output_layer_manager_t
 
         reorder_above(view_sublayer->layer->floating, view_sublayer, below_sublayer);
         raise_to_front(view_sublayer->views, view, true); // bring to back == reverse
+        rebuild_stack_order();
     }
 
     /** Precondition: view and above are in the same layer */
@@ -290,6 +300,7 @@ class output_layer_manager_t
         if (view_sublayer == above_sublayer)
         {
             reorder_below(view_sublayer->views, view, above);
+            rebuild_stack_order();
 
             return;
         }
@@ -302,6 +313,7 @@ class output_layer_manager_t
 
         reorder_below(view_sublayer->layer->floating, view_sublayer, above_sublayer);
         raise_to_front(view_sublayer->views, view);
+        rebuild_stack_order();
     }
 
     void push_views(std::vector<wayfire_view>& into, layer_t layer_e,
@@ -323,7 +335,23 @@ class output_layer_manager_t
         }
     }
 
+    void rebuild_stack_order()
+    {
+        this->view_list = _get_views_in_layer(VISIBLE_LAYERS);
+    }
+
     std::vector<wayfire_view> get_views_in_layer(uint32_t layers_mask)
+    {
+        if (layers_mask == VISIBLE_LAYERS)
+        {
+            return view_list;
+        } else
+        {
+            return _get_views_in_layer(layers_mask);
+        }
+    }
+
+    std::vector<wayfire_view> _get_views_in_layer(uint32_t layers_mask)
     {
         std::vector<wayfire_view> views;
         auto try_push = [&] (layer_t layer, bool promoted = false)
